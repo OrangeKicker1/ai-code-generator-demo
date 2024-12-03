@@ -1,1 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Code Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+    #code-output {
+      white-space: pre-wrap;
+      background-color: #f4f4f4;
+      padding: 10px;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+      height: 300px;
+      overflow-y: auto;
+    }
+    #loading {
+      display: none;
+      margin-top: 10px;
+    }
+    #controls {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>AI Code Generator</h1>
+  <textarea id="prompt-input" rows="4" cols="50" placeholder="Enter your prompt here"></textarea><br>
+  <button onclick="generateCode()">Generate Code</button>
+  <button id="stop-button" style="display:none;" onclick="stopGeneration()">Stop Generation</button>
+  <div id="loading">Generating code... Please wait.</div>
+  <div id="code-output"></div>
+  <div id="controls">
+    <button onclick="editCode()">Edit Code</button>
+    <button id="open-new-tab" style="display:none;" onclick="openInNewTab()">Open in New Tab</button>
+  </div>
 
+  <script>
+    let codeGenerationInProgress = false;
+    let codeGenerationController;
+
+    async function generateCode() {
+      if (codeGenerationInProgress) {
+        alert('Code generation is already in progress.');
+        return;
+      }
+
+      const prompt = document.getElementById('prompt-input').value;
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('code-output').innerText = '';
+      document.getElementById('open-new-tab').style.display = 'none';
+      document.getElementById('stop-button').style.display = 'inline';
+
+      codeGenerationInProgress = true;
+
+      const response = await fetch('/generate-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
+        signal: (codeGenerationController = new AbortController()).signal,
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let done = false;
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: !done });
+          if (chunk.includes('[DONE]')) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('open-new-tab').style.display = 'block';
+            document.getElementById('stop-button').style.display = 'none';
+            codeGenerationInProgress = false;
+          } else {
+            document.getElementById('code-output').innerText += chunk;
+          }
+        }
+      }
+    }
+
+    function stopGeneration() {
+      if (codeGenerationController) {
+        codeGenerationController.abort();
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('stop-button').style.display = 'none';
+        codeGenerationInProgress = false;
+      }
+    }
+
+    function editCode() {
+      const code = document.getElementById('code-output').innerText;
+      const editedCode = prompt('Edit the code:', code);
+      if (editedCode !== null) {
+        document.getElementById('code-output').innerText = editedCode;
+      }
+    }
+
+    function openInNewTab() {
+      const code = document.getElementById('code-output').innerText;
+      const newTab = window.open();
+      newTab.document.write('<pre>' + code + '</pre>');
+      newTab.document.close();
+    }
+  </script>
+</body>
+</html>
